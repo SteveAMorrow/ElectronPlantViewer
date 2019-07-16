@@ -1,15 +1,6 @@
-# **Plant Viewer (in development)**
+## **MOVED [HERE](https://bentleycs.visualstudio.com/iModelTechnologies/_workitems/recentlyupdated/) (select "OpenPlant Viewer" in Area)**
 
-Stages in a task:
-
-1. *ongoing*
-2. *in progress*
-3. *partially done*
-4. *mostly done*
-5. **Done**
-
-## **Current Tasks**
-
+### *To be deleted...*
 1. Fix configuration reading, and comply with config.json (don't default to anything, use warnings). *mostly done* - Nick
 2. Fix CSS formatting. *mostly done* - Nick
 3. Rework titles. *mostly done* - Nick
