@@ -8,56 +8,53 @@ import { IModelJsElectronManager } from "@bentley/electron-manager";
 import * as electron from "electron";
 import * as configurationData from "../../common/settings.json";
 import * as electronFs from "fs";
-// tslint:disable: no-console
-
-/** Testing method for updating config.json */
-export let testingMethod = () => {
-  const temp = {
-    imodel_name : "testing",
-    project_name : "testing",
-    drawing_name : "testing",
-  };
-  const newTemp = JSON.stringify(temp);
-  electronFs.writeFileSync(path.join(__dirname, "../../common/settings.json"), newTemp);
-};
+import { HubIModel, Project } from "@bentley/imodeljs-clients";
+import { Drawing } from "@bentley/imodeljs-backend";
 
 /** Method to change the iModelName stored in the config.json
  * @param iModelName string wsgId of the new iModel
  */
 export const changeiModel = (iModelName: string) => {
   const newConfig = {
-  imodel_name : iModelName,
-  project_name : configurationData.project_name,
-  drawing_name : configurationData.drawing_name,
-};
+    imodel_name: iModelName,
+    project_name: configurationData.project_name,
+    drawing_name: configurationData.drawing_name,
+  };
   const stringifiedConfig = JSON.stringify(newConfig);
   electronFs.writeFileSync(path.join(__dirname, "../../common/settings.json"), stringifiedConfig);
 };
 
-/** Method to change the iModelName stored in the config.json
- * @param ProjectName string wsgId of the new Project
+/**
+ *  This method reads the config, parses it into a JSON object, and returns it back to the renderer
+ * @param event The event sent by the renderer processes back to the main
  */
-
-export const readData = (event: electron.Event) => {
+export const readData = (event?: electron.Event, arg?: string) => {
   const configObject: any = "";
   electronFs.readFile(path.join(__dirname, "../../common/settings.json"), (error: Error | null, data: any) => {
-    console.log("In the read data message 1 " + data);
     if (error) {
-    console.log("error " + error);
+      console.log("error " + error);
     }
-    const object = JSON.parse(data);
-    console.log("In the read data message " + object.imodel_name);
-    event.sender.send("readConfigResults", object);
-    event.sender.send("readConfigResultsIModel", object);
-});
+    const jsonObject = JSON.parse(data);
+    if (event) {
+      if (arg === "imodel") {
+        event.sender.send("readConfigResultsIModel", jsonObject);
+      } else {
+        event.sender.send("readConfigResults", jsonObject);
+      }
+    }
+  });
   return configObject;
 };
 
+/**
+ * This method sets the project name in the settings.json
+ * @param projectName The name of the desired project
+ */
 export const changeProject = (projectName: string) => {
   const newConfig = {
-    imodel_name : configurationData.imodel_name,
-    project_name : projectName,
-    drawing_name : configurationData.drawing_name,
+    imodel_name: configurationData.imodel_name,
+    project_name: projectName,
+    drawing_name: configurationData.drawing_name,
   };
   const stringifiedConfig = JSON.stringify(newConfig);
   electronFs.writeFileSync(path.join(__dirname, "../../common/settings.json"), stringifiedConfig);
@@ -68,27 +65,14 @@ export const changeProject = (projectName: string) => {
  */
 export const changeDrawingName = (drawingName: string) => {
   const newConfig = {
-    imodel_name : configurationData.imodel_name,
-    project_name : configurationData.project_name,
-    drawing_name : drawingName,
+    imodel_name: configurationData.imodel_name,
+    project_name: configurationData.project_name,
+    drawing_name: drawingName,
   };
   const stringifiedConfig = JSON.stringify(newConfig);
   electronFs.writeFileSync(path.join(__dirname, "../../common/config.json"), stringifiedConfig);
 };
 
-import { HubIModel, Project } from "@bentley/imodeljs-clients";
-import { Drawing } from "@bentley/imodeljs-backend";
-
-// Console logging conditionals, that ensure that electron backend has loaded property, a problem with older versions of the application, that can arise
-// again when improperly importing and using electron modules
-// if (electron) {
-//   console.log("Electron is loaded");
-// } else {
-//   console.log("Electron not loaded");
-// }
-// if (electron.ipcMain) {
-//   console.log(electron.ipcMain + "electron ipc main loaded");
-// }
 
 // The following four variables are bound to functions, and serve as getters and settings for backend-frontend communication
 // This is because external components that require data gathered in App.tsx, are unable to import that file, due to security reasons.
@@ -160,15 +144,27 @@ export default function initialize(rpcs: RpcInterfaceDefinition[]) {
     }
   })();
 
-  /* This part of the code is a global shortcut, these allow you to apply key bdings to the window eg: f5 = refreshing the page
-  const globalShortcut = getGlobalShortcut();
-  if(globalShortcut) {
-  globalShortcut.register("f5", () => {
-    if (manager.mainWindow)
-      manager.mainWindow.reload();
+}
+
+export function newWindow() {
+  if (manager.mainWindow) {
+  electron.dialog.showOpenDialog(manager.mainWindow, {
+    title: "Select configuration File",
+    properties: ["openFile", "multiSelections"],
+
+  }, (filePaths) => {
+    if (!filePaths) {
+      electron.app.quit();
+    }
   });
-  } */
-  // testingMethod();
+  }
+}
+
+export function popupWarning(typeOfError?: string) {
+  const errorMessage = "Warning! The " + typeOfError + " is missing from the settings file!";
+  if(manager.mainWindow) {
+electron.dialog.showMessageBox(manager.mainWindow, {type: "error", message: errorMessage, title: "Error"});
+  }
 }
 
 /* initialize the opening of a secondary window, parented by the main window */
@@ -192,9 +188,6 @@ export function initializePopup() {
     // once the secondary window has been initialized, low its relative files, send messages across the main window
     if (manager.mainWindow)
       manager.mainWindow.addTabbedWindow(secondaryWindow);
-    secondaryWindow.webContents.send("currentProject", currentProject);
-    secondaryWindow.webContents.send("projectsList", projectsList);
-    secondaryWindow.webContents.send("iModelsList", iModelsList);
     secondaryWindow.loadFile("../../../../../src/frontend/iModelList.html");
   })();
 }
