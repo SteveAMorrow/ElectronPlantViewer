@@ -11,8 +11,8 @@
 ### **Install**
 
 1. If you do not already have a project, create a new project with the default settings by clicking [here for **Production**](https://imodeljs.github.io/iModelJs-docs-output/getting-started/registration-dashboard/) or [here for **QA**](http://builds.bentley.com/prgbuilds/AzureBuilds/iModelJsDocs/public/getting-started/registration-dashboard/).
-2. Open the Command Prompt and navigate to where you would like the repository to be created (it will create a new folder called **imodeljs-openplant-viewer**).
-3. Type the following command to clone the repository in the "imodeljs-openplant-viewer" folder.
+2. Open the Command Prompt and navigate to where you would like the repository to be created (it will create a new folder called **ElectronPlantViewer**).
+3. Type the following command to clone the repository in the "ElectronPlantViewer" folder.
    - **`git clone https://github.com/openplanttools/ElectronPlantViewer`**
 4. Type the following commands to open the repository in Visual Studio Code.
    - **`cd imodeljs-openplant-viewer`**
@@ -47,6 +47,26 @@
 4. Click on "**Reload iModel**" (top-right of screen) to refresh the iModel you are viewing if it was updated on the cloud after you opened it in the viewer.
 5. To switch drawings, click on a **drawing** under the **Tree** (top-right of screen). This will update the viewer.
 6. To select a **graphic** in a drawing, either click on it in the viewer, or expand the drawing under **Tree** and select one under **PID Drawing Categories**. When a graphic is selected, it will be highlighted in the viewer and will have its information displayed in **Properties** (bottom of screen).
+
+### **Workflow**
+
+- The [**Azure DevOps repository**](https://dev.azure.com/bentleycs/Plant%20Design/_git/imodeljs-openplant-viewer) contains all up-to-date revisions.
+- The [**GitHub repository**](https://github.com/openplanttools/ElectronPlantViewer) contains only the published, operational, user-friendly revisions.
+
+1. To push changes to either repository, type the following command in the terminal to create a new branch.
+   - **`git checkout -b [branch name]`**
+2. Type in the following command to stage your changes to the new branch.
+   - **`git add .`**
+3. Type in the following command to commit your changes to the new branch.
+   - **`git commit -m "[comment describing changes]"`**
+4. Type in the following command to push your changes to the new branch.
+   - **`git push origin [branch name]`**
+5. Open the repository in the browser ([**Azure DevOps**](https://dev.azure.com/bentleycs/Plant%20Design/_git/imodeljs-openplant-viewer) or [**GitHub**](https://github.com/openplanttools/ElectronPlantViewer)).
+6. Create a pull request for the new branch, and then approve and complete it.
+7. The master branch has now been updated with the pushed changes.
+8. Remember to type the following commands in your terminal to get the updated master branch.
+   - **`git checkout master`**
+   - **`git pull origin master`**
 
 ## **Git Developer Guide**
 
