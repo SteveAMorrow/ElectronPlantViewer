@@ -6,7 +6,6 @@ import * as React from "react";
 import { IModelApp, IModelConnection } from "@bentley/imodeljs-frontend";
 import { Tree } from "@bentley/ui-components";
 import { IPresentationTreeDataProvider, PresentationTreeDataProvider, treeWithUnifiedSelection } from "@bentley/presentation-components";
-// tslint:disable: no-console
 
 // create a HOC tree component that supports unified selection
 // tslint:disable-next-line:variable-name
