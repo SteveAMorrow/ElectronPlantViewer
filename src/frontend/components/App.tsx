@@ -6,7 +6,7 @@ import * as React from "react";
 import { Id64String, OpenMode } from "@bentley/bentleyjs-core";
 import { Range3d } from "@bentley/geometry-core";
 import { AccessToken, ConnectClient, IModelQuery, Project, Config } from "@bentley/imodeljs-clients";
-import { IModelApp, IModelConnection, FrontendRequestContext, AuthorizedFrontendRequestContext, DrawingViewState, ScreenViewport, EmphasizeElements, FeatureOverrideType } from "@bentley/imodeljs-frontend";
+import { IModelApp, IModelConnection, FrontendRequestContext, AuthorizedFrontendRequestContext, DrawingViewState, ScreenViewport, EmphasizeElements, FeatureOverrideType} from "@bentley/imodeljs-frontend";
 import { Presentation, SelectionChangeEventArgs, ISelectionProvider } from "@bentley/presentation-frontend";
 import { Button, ButtonSize, ButtonType, Spinner, SpinnerSize } from "@bentley/ui-core";
 import { SignIn } from "@bentley/ui-components";
@@ -24,6 +24,7 @@ import { ColorDef, ViewDefinitionProps } from "@bentley/imodeljs-common";
 import TitleBar from "./Title";
 import { ipcRenderer, Event } from "electron";
 import { GroupWidget } from "./Group";
+import { fitView } from "./Toolbar";
 // tslint:disable: no-console
 // cSpell:ignore imodels
 
@@ -35,6 +36,8 @@ let currentProject: Project;
 let currentIModel: string;
 let views3D: ViewDefinitionProps[];
 let views2D: ViewDefinitionProps[];
+let currentProjectName: string = "";
+let currentIModelName: string = "";
 
 // Getters for instance variables
 export function getCurrentProject() {
@@ -71,6 +74,7 @@ export interface AppState {
   viewDefinitionId?: Id64String;
   menuOpened: boolean;
   menuName: string;
+  shouldCall: boolean;
 }
 
 /** A component the renders the whole application UI */
@@ -84,13 +88,15 @@ export default class App extends React.Component<{}, AppState> {
         isLoading: false,
         accessToken: undefined,
       },
-      projectName: "",
-      iModelName: "",
+      projectName: currentProjectName,
+      iModelName: currentIModelName,
       drawingName: "",
       offlineIModel: false,
       menuOpened: false,
-      menuName: "Expand Menu",
+      menuName: "+",
+      shouldCall: false,
     };
+    this.makeCalls();
     thisApp = this;
   }
 
@@ -98,29 +104,20 @@ export default class App extends React.Component<{}, AppState> {
   private async _getCorrectProjectName() {
 
     // Sets up listener for response back from main/server
-    ipcRenderer.once("readConfigResults", async (event: Event, configObject: any) => {
+    ipcRenderer.on("readConfigResults", async (event: Event, configObject: any) => {
       if (event) {
-        console.log(configObject);
+        console.log(event);
       }
 
       // assigns correct config value, changes the state of the app accordingly
-      const configProject = configObject.project_name;
-      if (configObject.project_name.length < 1) {
-        ipcRenderer.send("popupWarning", "project");
-        try {
-          ipcRenderer.send("configDataMissing", "testing from app");
-          throw new ReferenceError("No project id has been specified");
-        } catch (e) {
-          console.log((e as Error).message);
-          ipcRenderer.send("closeApplication", "Missing project");
-        }
-      }
       this.setState(() => ({
-        projectName: configProject,
+        projectName: configObject.project_name,
         iModelName: configObject.imodel_name,
       }));
-      if (configProject && configObject.imodel_name) {
-        await this._startProcess(configProject, configObject.imodel_name);
+      currentProjectName = configObject.project_name;
+      currentIModelName = configObject.imodel_name;
+      if (configObject.project_name && configObject.imodel_name) {
+        await this._startProcess(configObject.project_name, configObject.imodel_name);
       }
     });
 
@@ -140,7 +137,6 @@ export default class App extends React.Component<{}, AppState> {
   /** React method, after a component mounted sets up non-ui portions */
   public componentDidMount() {
     // tslint:disable-next-line: no-floating-promises
-    this.makeCalls();
     // Subscribe for unified selection changes
     Presentation.selection.selectionChange.addListener(this._onSelectionChanged);
 
@@ -150,6 +146,7 @@ export default class App extends React.Component<{}, AppState> {
       SimpleViewerApp.oidcClient.getAccessToken(new FrontendRequestContext()) // tslint:disable-line: no-floating-promises
         .then((accessToken: AccessToken | undefined) => {
           this.setState((prev) => ({ user: { ...prev.user, accessToken, isLoading: false } }));
+          // tslint:disable-next-line: no-floating-promises
         });
     }
   }
@@ -312,9 +309,7 @@ export default class App extends React.Component<{}, AppState> {
       } else {
         await imodel.close();
       }
-     // this.setState({ imodel: undefined, viewDefinitionId: undefined });
-      console.log(e + "IN ONIMODEL");
-      console.log(e.message);
+      // this.setState({ imodel: undefined, viewDefinitionId: undefined });
     }
   }
 
@@ -331,19 +326,17 @@ export default class App extends React.Component<{}, AppState> {
     });
     if (this.state.menuOpened) {
       this.setState({
-        menuName: "Expand Menu",
+        menuName: "+",
       });
     } else {
       this.setState({
-        menuName: "Collapse Menu",
+        menuName: "-",
       });
     }
   }
 
   /** Finds project and iModel ID's using their names */
   private async getIModelInfo(projectName: string, imodelName: string): Promise<{ projectId: string, imodelId: string }> {
-    console.log(projectName + "PROJECT" + 2);
-    console.log("IMODELNAME" + imodelName + 2);
     // Requests a context and connection client to access the iModelHub, and retrieves a list of projects
     requestContext = await AuthorizedFrontendRequestContext.create();
     connectClient = new ConnectClient();
@@ -353,7 +346,6 @@ export default class App extends React.Component<{}, AppState> {
       currentProject = await connectClient.getProject(requestContext, { $filter: `Name+eq+'${projectName}'` });
     } catch (e) {
       // alert(`Project with name "${projectName}" does not exist.`);
-      console.log("in there");
       throw new Error(`Project with name "${projectName}" does not exist.`);
     }
 
@@ -382,47 +374,50 @@ export default class App extends React.Component<{}, AppState> {
 
   /** Handles on-click for initial open iModel button */
   private _startProcess = async (projectName: string, imodelName: string) => {
-    console.log(projectName + "PROJECT");
-    console.log("IMODELNAME" + imodelName);
-    console.log(this.state.iModelName + " PROJECT in start of process" + this.state.projectName);
     let imodel: IModelConnection | undefined;
     try {
 
       // Attempt to open the imodel
-      console.log(projectName + "PROJECT" + 3);
-      console.log("IMODELNAME" + imodelName + 3);
       const info = await this.getIModelInfo(projectName, imodelName);
       imodel = await IModelConnection.open(info.projectId, info.imodelId, OpenMode.Readonly);
       await this.onIModelSelected(imodel);
     } catch (e) {
-      console.log(e);
-      console.log("start Process");
-      console.log(e.message);
     }
   }
 
   private async makeCalls() {
-    await this._getCorrectProjectName();
+    console.log("IN MAKE CALLS" + this.state.projectName + this.state.iModelName);
+    if(this.state.projectName.length < 1 || this.state.iModelName.length < 1) {
+     await this._getCorrectProjectName();
+    } else {
+      await this._startProcess(this.state.projectName, this.state.iModelName);
+    }
   }
 
   /** Renders the app */
   public render() {
+    let view: React.ReactNode;
     let ui: React.ReactNode;
 
     if (this.state.user.isLoading || window.location.href.includes(this._signInRedirectUri)) {
       // If user is currently being loaded, just tell that
+      view = (<></>);
       ui = `${IModelApp.i18n.translate("SimpleViewer:signing-in")}...`;
     } else if (!this.state.user.accessToken && !this.state.offlineIModel) {
       // If user doesn't have and access token, show sign in page
+      view = (<></>);
       ui = (<SignIn onSignIn={this._onStartSignin} onOffline={this._onOffline} />);
     } else if (!this.state.imodel || !this.state.viewDefinitionId) {
       // if we don't have an imodel / view definition id - render a button that initiates imodel open
       // tslint:disable-next-line: no-floating-promises
+      view = (<></>);
       ui = (<span className="open-imodel"><Spinner size={SpinnerSize.XLarge} /></span>);
     } else {
       // If we do have an imodel and view definition id - render imodel components
       const titleName: string = "Project: " + this.state.projectName + ", iModel: " + this.state.iModelName; // + ", Drawing: " + Config.App.get("imjs_test_drawing") (not working yet);
+      view = <GroupWidget view={"test"} />;
       ui = (<IModelComponents imodel={this.state.imodel} viewDefinitionId={this.state.viewDefinitionId} menuOpened={this.state.menuOpened} title={titleName} />);
+      fitView();
     }
     // Render the app
     return (
@@ -430,6 +425,9 @@ export default class App extends React.Component<{}, AppState> {
         <div className="app-header">
           <div className="text">
             <TitleBar projectName={this.state.projectName} drawingName={this.state.drawingName} iModelName={this.state.iModelName} />
+          </div>
+          <div className="view">
+            {view}
           </div>
           <div className="reload">
             <OpenIModelButton accessToken={this.state.user.accessToken} offlineIModel={this.state.offlineIModel} onIModelSelected={this._onIModelSelected} imodelName={this.state.iModelName} projectName={this.state.projectName} initialButton={true} />
@@ -544,7 +542,7 @@ export class OpenIModelButton extends React.PureComponent<OpenIModelButtonProps,
   public render() {
     return (
       <Button size={ButtonSize.Default} buttonType={ButtonType.Primary} className="button-reload-imodel" onClick={this._onClick} >
-        <span>Reload iModel</span>
+        <span>Refresh iModel</span>
         {this.state.isLoading ? <span style={{ marginLeft: "8px" }}><Spinner size={SpinnerSize.Small} /></span> : undefined}
       </Button>
     );
@@ -562,6 +560,7 @@ interface IModelComponentsProps {
 /** The live state for an iModel component */
 interface IModelComponentState {
   iModel: IModelConnection;
+  viewId: Id64String;
 }
 
 /** Renders a viewport, a tree, a property grid and a table */
@@ -572,6 +571,7 @@ class IModelComponents extends React.PureComponent<IModelComponentsProps, IModel
     super(props);
     this.state = {
       iModel: this.props.imodel,
+      viewId: this.props.viewDefinitionId,
     };
   }
 
@@ -581,12 +581,17 @@ class IModelComponents extends React.PureComponent<IModelComponentsProps, IModel
     // Can be found at `assets/presentation_rules/Default.PresentationRuleSet.xml`
     const rulesetId = "Default";
 
+    // Updates the view ID when a new view is selected
+    this.setState(() => ({
+      viewId: this.props.viewDefinitionId,
+    }));
+
     // Open with Menu opened
     if (this.props.menuOpened) {
       return (
         <div className="app-content">
           <div className="top-left" id="viewport1">
-            <ViewportContentControl imodel={this.props.imodel} rulesetId={rulesetId} viewDefinitionId={this.props.viewDefinitionId} />
+            <ViewportContentControl imodel={this.props.imodel} rulesetId={rulesetId} viewDefinitionId={this.state.viewId} />
           </div>
           <div className="right">
             <div className="top">
@@ -594,7 +599,6 @@ class IModelComponents extends React.PureComponent<IModelComponentsProps, IModel
             </div>
             <div className="bottom">
               <div className="sub">
-                <GroupWidget view={"test"} />
                 <PropertiesWidget imodel={this.props.imodel} rulesetId={rulesetId} />
               </div>
             </div>
@@ -608,7 +612,7 @@ class IModelComponents extends React.PureComponent<IModelComponentsProps, IModel
       return (
         <div className="app-content">
           <div className="top-left-expanded" id="viewport1">
-            <ViewportContentControl imodel={this.props.imodel} rulesetId={rulesetId} viewDefinitionId={this.props.viewDefinitionId} />
+            <ViewportContentControl imodel={this.props.imodel} rulesetId={rulesetId} viewDefinitionId={this.state.viewId} />
           </div>
         </div>
       );
